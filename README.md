@@ -37,16 +37,7 @@ brew tap colonsh/tap
 brew install colonsh
 ```
 
-### B. Chocolatey (Windows)
-
-Chocolatey is the recommended package manager for Windows users.
-
-```bash
-# 1. Install the application
-choco install colonsh
-```
-
-### C. Download Binary (All Platforms)
+### B. Download Binary (All Platforms)
 
 You can download the pre-compiled binary directly from the GitHub Releases page and manually add it to your PATH.
 
