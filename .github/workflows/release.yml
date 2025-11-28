@@ -1,0 +1,69 @@
+name: Release
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+' # Trigger on tags like v1.0.0, v2.3.4, etc.
+
+jobs:
+  build-and-release:
+    name: Build & Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go 1.25.4
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.4'
+
+      - name: Run Go Mod Tidy
+        run: go mod tidy
+
+      # --------------------------------------------------------
+      # Build Binaries for Multiple Platforms
+      # The '.' means build the current package (main.go in the root)
+      # --------------------------------------------------------
+      - name: Build for Linux (amd64)
+        run: |
+          GOOS=linux GOARCH=amd64 go build -o colonsh-linux-amd64 .
+          
+      - name: Build for macOS (amd64)
+        run: |
+          GOOS=darwin GOARCH=amd64 go build -o colonsh-darwin-amd64 .
+
+      - name: Build for macOS (arm64)
+        # Note: This build command might fail on older Go versions or runners,
+        # but it is standard practice to attempt the cross-compile.
+        run: |
+          GOOS=darwin GOARCH=arm64 go build -o colonsh-darwin-arm64 .
+
+      - name: Build for Windows (amd64)
+        run: |
+          GOOS=windows GOARCH=amd64 go build -o colonsh-windows-amd64.exe .
+
+      # --------------------------------------------------------
+      # Create GitHub Release
+      # --------------------------------------------------------
+      - name: Get Release Tag
+        id: tag
+        run: echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.TAG }}
+          name: Release ${{ steps.tag.outputs.TAG }}
+          draft: false
+          prerelease: false
+          # Upload all compiled binaries as assets to the new release
+          files: |
+            colonsh-linux-amd64
+            colonsh-darwin-amd64
+            colonsh-darwin-arm64
+            colonsh-windows-amd64.exe
