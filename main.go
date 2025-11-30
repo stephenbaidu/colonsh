@@ -16,7 +16,7 @@ import (
 	"github.com/charmbracelet/huh"
 )
 
-const toolVersion = "0.0.1"
+const Version = "0.0.2"
 
 // CommandFunc is the standardized signature for all subcommand handlers.
 type CommandFunc func(cfg *Config, args []string) error
@@ -127,6 +127,7 @@ var builtinAliases = []BuiltinAlias{
 	{Name: "gs", Desc: "git status", Template: "git status"},
 	{Name: "ll", Desc: "git pull", Template: "git pull"},
 	{Name: "gaa", Desc: "git add .", Template: "git add ."},
+	{Name: "gcan", Desc: "git commit --amend --no-edit", Template: "git commit --amend --no-edit"},
 	{Name: "gp", Desc: "git push", Template: "git push"},
 	{Name: "gpf", Desc: "git push --force", Template: "git push --force"},
 	{Name: "gl", Desc: "git log --oneline --graph", Template: "git log --oneline --graph --decorate"},
@@ -204,8 +205,8 @@ func run() error {
 // version – print version number
 // -----------------------------------------------------------------------------
 func cmdVersion() error {
-	// Now prints the globally defined toolVersion constant
-	fmt.Println("colonsh version:", toolVersion)
+	// Now prints the globally defined Version constant
+	fmt.Println("colonsh version:", Version)
 	return nil
 }
 
