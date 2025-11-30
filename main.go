@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -16,42 +15,6 @@ import (
 
 	"github.com/charmbracelet/huh"
 )
-
-const (
-	configFileName = "colonsh.json"
-	configEnvVar   = "COLONSH_CONFIG" // optional override, nice to have
-)
-
-type Config struct {
-	Version     string       `json:"version"`
-	Aliases     []Alias      `json:"aliases"`
-	ProjectDirs []ProjectDir `json:"project_dirs"`
-	GitRepos    []GitRepo    `json:"git_repos"`
-	OpenCmd     string       `json:"open_cmd,omitempty"`
-}
-
-type Alias struct {
-	Name string `json:"name"`
-	Cmd  string `json:"cmd"`
-}
-
-type ProjectDir struct {
-	Path    string   `json:"path"`
-	Exclude []string `json:"exclude"`
-}
-
-type GitRepo struct {
-	Slug    string       `json:"slug"`
-	Name    string       `json:"name"`
-	OpenCmd string       `json:"open_cmd,omitempty"`
-	Actions []RepoAction `json:"actions"`
-}
-
-type RepoAction struct {
-	Name string `json:"name"`
-	Cmd  string `json:"cmd"`
-	Dir  string `json:"dir,omitempty"`
-}
 
 type BuiltinAlias struct {
 	Name     string // without leading ':'
@@ -376,87 +339,6 @@ fi
 	fmt.Printf("🎉 Successfully appended colonsh setup block to %s.\n", expandedPath)
 	fmt.Printf("Please run 'source %s' or restart your terminal for changes to take effect.\n", profilePath)
 	return nil
-}
-
-// -----------------------------------------------------------------------------
-// Config
-// -----------------------------------------------------------------------------
-
-func colonConfigPath() (string, error) {
-	// Optional: allow override via env var
-	if p := os.Getenv(configEnvVar); p != "" {
-		return p, nil
-	}
-
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, configFileName), nil
-}
-
-func loadOrInitConfig(path string) (*Config, error) {
-	if _, err := os.Stat(path); err == nil {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return nil, err
-		}
-		var cfg Config
-		if err := json.Unmarshal(data, &cfg); err != nil {
-			return nil, fmt.Errorf("failed to parse %s: %w", path, err)
-		}
-		return &cfg, nil
-	}
-
-	// Create default config similar to your Bash script
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return nil, err
-	}
-	cfg := defaultConfig()
-	data, err := json.MarshalIndent(cfg, "", "    ")
-	if err != nil {
-		return nil, err
-	}
-	if err := os.WriteFile(path, data, 0o644); err != nil {
-		return nil, err
-	}
-
-	fmt.Println("colonsh: no config found, created new one at", path)
-	fmt.Println("colonsh: edit the file to add your projects and actions.")
-	return cfg, nil
-}
-
-func defaultConfig() *Config {
-	return &Config{
-		Version: "0.0.1",
-		OpenCmd: "code .",
-		Aliases: []Alias{
-			{
-				Name: "config",
-				Cmd:  fmt.Sprintf("code ~/%s", configFileName),
-			},
-			{Name: "c", Cmd: "code ."},
-			{Name: "source", Cmd: "source ~/.zshrc"},
-		},
-		ProjectDirs: []ProjectDir{
-			{
-				Path: "~/MyProjects",
-				Exclude: []string{
-					"bin",
-					"notes",
-				},
-			},
-		},
-		GitRepos: []GitRepo{
-			{
-				Slug: "octocat/Hello-World",
-				Name: "Hello-World",
-				Actions: []RepoAction{
-					{Name: "PRs", Cmd: "open https://github.com/octocat/Hello-World/pulls"},
-				},
-			},
-		},
-	}
 }
 
 // -----------------------------------------------------------------------------
