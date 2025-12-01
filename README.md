@@ -2,6 +2,24 @@
 
 > **A simple command-line helper that gives you colon-based aliases (:pd, :po, :pa) and lets you define project directories, repo-specific actions, and simple shortcuts — all from one JSON config file.**
 
+[![Go Build Status](https://github.com/stephenbaidu/colonsh/actions/workflows/release.yml/badge.svg)](https://github.com/stephenbaidu/colonsh/actions/workflows/release.yml)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Homebrew Version](https://img.shields.io/badge/Homebrew-v0.0.2-brightgreen)](https://github.com/stephenbaidu/homebrew-tap)
+
+***
+
+## Usage
+```bash
+::       # show help menu
+:help    # show help menu
+:pd      # cd into a project directory by selecting from choice list
+:pa      # run a project-specific action from choice list
+:prs     # Open Pull Requests URL
+:main    # Switch to main branch
+:master  # Switch to master branch
+```
+You can add custom aliases by adding name/cmd pairs under `aliases` of config file, [see Configuration](#configuration). Adding `{ "name": "c", "cmd": "code ." }` allows you to use `:c` to run `code .`
+
 ## Installation
 ### Homebrew (Recommended)
 This is the easiest and recommended way to install `colonsh` on macOS or Linux.
@@ -31,8 +49,8 @@ Example `colonsh.json`
   "open_cmd": "code .",
   "aliases": [
     { 
-      "name": "config", 
-      "cmd": "code ~/colonsh.json" 
+      "name": "c", 
+      "cmd": "code ." 
     },
     { 
       "name": "source", 
