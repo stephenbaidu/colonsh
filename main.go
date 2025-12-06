@@ -21,18 +21,11 @@ const Version = "0.0.2"
 // CommandFunc is the standardized signature for all subcommand handlers.
 type CommandFunc func(cfg *Config, args []string) error
 
-type BuiltinAlias struct {
-	Name     string      // without leading ':'
-	Desc     string      // for printHelp
-	Template string      // alias RHS; use {{BIN}} where COLONSH_BIN should go
-	Handler  CommandFunc // The Go function to execute for this command
-}
-
 // Order matters: simpler/common commands first usually looks better
 var builtinAliases = []BuiltinAlias{
 	// --- Core / Meta ---
 	{
-		Name: "help", Desc: "Show this help menu", Template: "{{BIN}}",
+		Name: "help", Desc: "Show this help menu", Template: "{{BIN}} help",
 		// No handler needed, handled as default path in run()
 	},
 	{
@@ -51,7 +44,15 @@ var builtinAliases = []BuiltinAlias{
 	},
 	{
 		Name: "version", Desc: "Show colonsh version", Template: "{{BIN}} version",
-		// No handler needed, handled early in run()
+		Handler: func(_ *Config, _ []string) error {
+			return cmdVersion()
+		},
+	},
+	{
+		Name: "custom", Desc: "Show custom aliases", Template: "{{BIN}} custom",
+		Handler: func(cfg *Config, _ []string) error {
+			return cmdCustom(cfg, true)
+		},
 	},
 
 	// --- Project Navigation ---
@@ -133,6 +134,23 @@ var builtinAliases = []BuiltinAlias{
 	{Name: "gl", Desc: "git log --oneline --graph", Template: "git log --oneline --graph --decorate"},
 }
 
+func GetMaxNameLength[T Nameable](aliases []T) int {
+	// Add this nil check. It never hurts to be defensive against nils,
+	// even if local logic implies it won't happen.
+	if aliases == nil {
+		return 0
+	}
+
+	maxNameLen := 0
+	for _, a := range aliases {
+		nameLen := len(a.GetName())
+		if nameLen > maxNameLen {
+			maxNameLen = nameLen
+		}
+	}
+	return maxNameLen
+}
+
 // commandHandlers maps a command name string to its execution function.
 var commandHandlers = map[string]CommandFunc{}
 
@@ -156,8 +174,8 @@ func run() error {
 	args := os.Args[1:]
 
 	if len(args) > 0 {
-		// Handle version flag
-		if args[0] == "--version" || args[0] == "-v" || args[0] == "version" {
+		// Handle other version flags
+		if args[0] == "--version" || args[0] == "-v" {
 			return cmdVersion()
 		}
 
@@ -205,24 +223,11 @@ func printHelp(cfg *Config) {
 	fmt.Printf("Welcome to colonsh! Your config file is at ~/%s\n", configFileName)
 
 	// 1. Calculate padding width
-	maxNameLen := 0
-	for _, ba := range builtinAliases {
-		if len(ba.Name) > maxNameLen {
-			maxNameLen = len(ba.Name)
-		}
-	}
-	// Check custom aliases for length too
-	if cfg != nil {
-		for _, a := range cfg.Aliases {
-			// +1 for the leading colon in visual representation logic below
-			if len(a.Name)+1 > maxNameLen {
-				maxNameLen = len(a.Name) + 1
-			}
-		}
-	}
+	maxNameLen := GetMaxNameLength(builtinAliases)
+	maxNameLen += 1 // +1 for the leading colon
 
 	// 2. Print Built-in Aliases (Everything except special init cases)
-	fmt.Println("\nBuilt-in :aliases:")
+	fmt.Println("\nBuilt-in aliases:")
 	// Add the root alias manually for clarity
 	fmt.Printf("  %-*s  %s\n", maxNameLen, "::", "Show this help menu")
 
@@ -236,17 +241,37 @@ func printHelp(cfg *Config) {
 	}
 
 	// 3. Custom aliases from config
-	if cfg != nil && len(cfg.Aliases) > 0 {
-		fmt.Println("\nCustom aliases (from config):")
-		for _, a := range cfg.Aliases {
-			if a.Name == "" || a.Cmd == "" {
-				continue
-			}
-			name := ":" + a.Name
-			fmt.Printf("  %-*s  %s\n", maxNameLen, name, a.Cmd)
-		}
-	}
 	fmt.Println()
+	cmdCustom(cfg, false)
+}
+
+func cmdCustom(cfg *Config, showHeader bool) error {
+	if showHeader {
+		fmt.Printf("Welcome to colonsh! Your config file is at ~/%s\n", configFileName)
+		fmt.Println()
+	}
+
+	fmt.Println("Custom aliases:")
+
+	if cfg == nil || len(cfg.Aliases) == 0 {
+		fmt.Println("No custom aliases defined in config.")
+		fmt.Println()
+		return nil
+	}
+
+	maxNameLen := GetMaxNameLength(cfg.Aliases)
+	maxNameLen += 1 // +1 for the leading colon
+
+	for _, a := range cfg.Aliases {
+		if a.Name == "" || a.Cmd == "" {
+			continue
+		}
+		name := ":" + a.Name
+		fmt.Printf("  %-*s  %s\n", maxNameLen, name, a.Cmd)
+	}
+
+	fmt.Println()
+	return nil
 }
 
 func cmdVersion() error {

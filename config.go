@@ -12,8 +12,6 @@ const (
 	configFileName = "colonsh.json"
 )
 
-// --- Struct Definitions (Exported for main.go access) ---
-
 // Config holds the top-level configuration structure.
 type Config struct {
 	Aliases     []Alias      `json:"aliases"`
@@ -26,6 +24,10 @@ type Config struct {
 type Alias struct {
 	Name string `json:"name"`
 	Cmd  string `json:"cmd"`
+}
+
+func (a Alias) GetName() string {
+	return a.Name
 }
 
 // ProjectDir defines a root directory to scan for Git repositories.
