@@ -10,6 +10,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time" // NEW: Required for cmdSetup
 
@@ -63,9 +64,9 @@ var builtinAliases = []BuiltinAlias{
 		},
 	},
 	{
-		Name: "cd", Desc: "Select subdirectory in CWD", Template: `cd "$({{BIN}} cd)"`,
-		Handler: func(_ *Config, _ []string) error {
-			return cmdChangeDir()
+		Name: "cd", Desc: "Select subdirectory in CWD. Usage: :cd [depth]", Template: `cd "$({{BIN}} cd)"`,
+		Handler: func(_ *Config, args []string) error {
+			return cmdChangeDir(args)
 		},
 	},
 	{
@@ -310,7 +311,6 @@ Set-Alias -Name ':help' -Value colonsh
 `, exe)
 		// NOTE: Complex aliases like :pd='cd "$(colonsh pd)"' require PowerShell functions
 		// instead of simple Set-Alias, which is too complex for this init output.
-		// Sticking to simple aliases for now, warning user about limitations.
 		for _, ba := range builtinAliases {
 			if ba.Template == "" || ba.Name == "help" || ba.Name == "pd" || ba.Name == "cd" {
 				continue
@@ -337,7 +337,7 @@ alias :help='$COLONSH_BIN'
 		// Dynamically generate aliases from builtinAliases
 		for _, ba := range builtinAliases {
 			// Skip commands that don't have a template (like 'init', 'setup')
-			if ba.Template == "" || ba.Name == "help" {
+			if ba.Template == "" || ba.Name == "help" || ba.Name == "pd" || ba.Name == "cd" {
 				continue
 			}
 
@@ -347,6 +347,14 @@ alias :help='$COLONSH_BIN'
 			// Use shellQuoteSingle to ensure the command inside the alias is safe
 			buf.WriteString(fmt.Sprintf("alias :%s='%s'\n", ba.Name, shellQuoteSingle(cmd)))
 		}
+		buf.WriteString(`
+		# --- Functions for commands that need arg forwarding ---
+		__colonsh_cd() { builtin cd "$("$COLONSH_BIN" cd "$@")"; }
+		alias :cd='__colonsh_cd'
+
+		__colonsh_pd() { builtin cd "$("$COLONSH_BIN" pd "$@")"; }
+		alias :pd='__colonsh_pd'
+		`)
 	}
 
 	// --- Custom Aliases from Config (Appended to both) ---
@@ -787,28 +795,38 @@ func cmdOpenPullRequests() error {
 	return openPath(pullsURL)
 }
 
-func cmdChangeDir() error {
-	entries, err := os.ReadDir(".")
+func cmdChangeDir(args []string) error {
+	// Special: :cd . => go to git repo root
+	if len(args) > 0 && args[0] == "." {
+		if !inGitRepo() {
+			return errors.New("not inside a git repository")
+		}
+		root, err := gitRoot()
+		if err != nil {
+			return err
+		}
+		fmt.Println(root)
+		return nil
+	}
+
+	// Default depth = 1
+	depth := 1
+	if len(args) > 0 {
+		if d, err := strconv.Atoi(args[0]); err == nil && d > 0 {
+			depth = d
+		}
+	}
+
+	// Recursively gather dirs
+	dirs, err := collectDirsRecursive(".", depth)
 	if err != nil {
 		return err
 	}
-
-	var dirs []string
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		name := e.Name()
-		if strings.HasPrefix(name, ".") {
-			continue
-		}
-		dirs = append(dirs, name)
-	}
-
 	if len(dirs) == 0 {
 		return errors.New("no subdirectories found")
 	}
 
+	// Build interactive list
 	opts := []huh.Option[string]{}
 	for _, d := range dirs {
 		opts = append(opts, huh.NewOption(d, d))
@@ -816,7 +834,7 @@ func cmdChangeDir() error {
 
 	var selected string
 	if err := huh.NewSelect[string]().
-		Title("Select a directory").
+		Title(fmt.Sprintf("Select a directory (depth=%d)", depth)).
 		Options(opts...).
 		Value(&selected).
 		Run(); err != nil {
@@ -828,7 +846,7 @@ func cmdChangeDir() error {
 		return nil
 	}
 
-	// Print for alias: alias :cd='cd "$(colonsh cd)"'
+	// Print path for aliased cd
 	fmt.Println(selected)
 	return nil
 }
@@ -1003,6 +1021,47 @@ func gitBranchesRaw() ([]string, error) {
 		branches = append(branches, line)
 	}
 	return branches, nil
+}
+
+func collectDirsRecursive(root string, maxDepth int) ([]string, error) {
+	var results []string
+
+	var walk func(dir string, depth int) error
+	walk = func(dir string, depth int) error {
+		if depth > maxDepth {
+			return nil
+		}
+
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return err
+		}
+
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue
+			}
+			name := e.Name()
+			if strings.HasPrefix(name, ".") { // skip hidden
+				continue
+			}
+
+			full := filepath.Join(dir, name)
+			rel, _ := filepath.Rel(".", full)
+
+			results = append(results, rel)
+
+			if depth < maxDepth {
+				_ = walk(full, depth+1)
+			}
+		}
+		return nil
+	}
+
+	if err := walk(root, 1); err != nil {
+		return nil, err
+	}
+	return results, nil
 }
 
 // openPath opens the given path (file or URL) using the system's default handler.
